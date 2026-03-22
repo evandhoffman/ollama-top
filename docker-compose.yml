@@ -1,0 +1,12 @@
+services:
+  ollama-top:
+    build: .
+    network_mode: host
+    volumes:
+      - ollama-top-data:/data
+    stdin_open: true
+    tty: true
+    stop_grace_period: 30s
+
+volumes:
+  ollama-top-data:

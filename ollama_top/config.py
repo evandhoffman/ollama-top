@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_HOST = "http://localhost:11434"
 POLL_INTERVAL = 1.0
 SPARKLINE_WIDTH = 20
-DB_PATH = Path.home() / ".local" / "share" / "ollama-top" / "history.db"
+DB_PATH = Path(os.environ.get("DB_PATH", Path.home() / ".local" / "share" / "ollama-top" / "history.db"))
 
 
 def resolve_host(cli_host: str | None = None) -> str:
