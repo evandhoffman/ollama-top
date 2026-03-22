@@ -12,15 +12,16 @@ from ollama_top.collector import OllamaCollector, Snapshot
 logger = logging.getLogger(__name__)
 
 
-def _human_bytes(n: int) -> str:
+def _human_bytes(n: int | float) -> str:
     """Format bytes as human-readable string (e.g. 8.9 GB)."""
-    if n < 1024:
-        return f"{n} B"
+    value = float(n)
+    if value < 1024:
+        return f"{value:.0f} B"
     for unit in ("KB", "MB", "GB", "TB"):
-        n /= 1024
-        if n < 1024:
-            return f"{n:.1f} {unit}"
-    return f"{n:.1f} PB"
+        value /= 1024
+        if value < 1024:
+            return f"{value:.1f} {unit}"
+    return f"{value:.1f} PB"
 
 
 def _countdown(dt: datetime | None) -> str:
@@ -101,7 +102,8 @@ class OllamaTop(App):
         width: 8;
     }
     .bar-pct {
-        width: 12;
+        width: auto;
+        min-width: 12;
         text-align: right;
     }
     ProgressBar {

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -21,7 +22,7 @@ class ModelInfo:
     name: str
     size: int  # bytes
     vram_size: int  # bytes
-    status: str  # "running" or "idle" (from size_vram field presence / details)
+    status: str  # "running" or "idle"
     expires_at: datetime | None = None
 
 
@@ -59,8 +60,9 @@ class OllamaCollector:
         self.version = ""
         self._session: aiohttp.ClientSession | None = None
         self._callbacks: list[SnapshotCallback] = []
-        # Track status transitions for tok/s estimation
-        self._prev_statuses: dict[str, str] = {}
+        # Track expires_at per model to detect activity
+        self._prev_expires: dict[str, str] = {}
+        # Track inference timing for tok/s estimation
         self._inference_start: dict[str, float] = {}
 
     def on_snapshot(self, cb: SnapshotCallback) -> None:
@@ -90,22 +92,23 @@ class OllamaCollector:
         models: list[ModelInfo] = []
         for m in data.get("models", []):
             expires_at = None
-            if exp := m.get("expires_at"):
+            expires_raw = m.get("expires_at", "")
+            if expires_raw:
                 try:
-                    expires_at = datetime.fromisoformat(exp)
+                    expires_at = datetime.fromisoformat(expires_raw)
                 except (ValueError, TypeError):
                     pass
 
-            # Determine status: Ollama uses "running" for active inference
-            # The size_vram field tells us how much VRAM is used
             size = m.get("size", 0)
             vram_size = m.get("size_vram", 0)
 
-            # Ollama /api/ps doesn't have an explicit "status" field in older versions.
-            # In newer versions, if a model is generating it shows in the response.
-            # We detect "running" vs "idle" based on the model's details or name presence.
-            # For now, treat all loaded models as idle unless we see activity indicators.
-            status = "idle"
+            # Detect activity: if expires_at changed since last poll, the model
+            # is actively being used (Ollama resets the timer on each request).
+            prev_exp = self._prev_expires.get(m.get("name", ""))
+            if prev_exp is not None and expires_raw and expires_raw != prev_exp:
+                status = "running"
+            else:
+                status = "idle"
 
             models.append(
                 ModelInfo(
@@ -116,6 +119,13 @@ class OllamaCollector:
                     expires_at=expires_at,
                 )
             )
+
+        # Update tracking state
+        self._prev_expires = {
+            m.get("name", ""): m.get("expires_at", "")
+            for m in data.get("models", [])
+        }
+
         return models
 
     def get_system(self) -> SystemInfo:
@@ -128,35 +138,29 @@ class OllamaCollector:
         )
 
     def _detect_activity(self, models: list[ModelInfo]) -> tuple[int, float]:
-        """Track status transitions and estimate throughput.
+        """Count active models and estimate throughput.
 
         Returns (active_count, estimated_tokens_per_sec).
         """
-        now = asyncio.get_event_loop().time()
+        now = time.monotonic()
         active = 0
         tps = 0.0
-        current_statuses: dict[str, str] = {}
 
         for m in models:
-            current_statuses[m.name] = m.status
             if m.status == "running":
                 active += 1
-                # If this model just started running, record the time
-                if self._prev_statuses.get(m.name) != "running":
+                if m.name not in self._inference_start:
                     self._inference_start[m.name] = now
                     logger.debug("Model %s started inference", m.name)
-
-            elif m.status == "idle" and self._prev_statuses.get(m.name) == "running":
-                # Model just finished inference
+            else:
+                # Model is idle — if it was previously running, the inference ended
                 start = self._inference_start.pop(m.name, None)
                 if start is not None:
                     duration = now - start
-                    if duration > 0:
-                        logger.debug(
-                            "Model %s finished inference in %.1fs", m.name, duration
-                        )
+                    logger.debug(
+                        "Model %s finished inference in %.1fs", m.name, duration
+                    )
 
-        self._prev_statuses = current_statuses
         return active, tps
 
     async def poll_loop(self) -> None:
