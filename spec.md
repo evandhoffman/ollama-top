@@ -11,8 +11,9 @@ Zero configuration, no proxy, no sudo — just run it and it works.
 - **No proxy**: do not intercept or reroute Ollama traffic
 - **No sudo**: must work as a limited (non-admin) user
 - **No API keys**: Ollama's local API is unauthenticated
-- **Cross-platform**: macOS (primary) and Linux
+- **Cross-platform**: macOS and Linux, bare Python (in venv) or Docker
 - **Installable via `pipx`**: single command to install and run
+- **Python 3.13**: requires Python >= 3.13
 
 ## Why These Constraints
 
@@ -94,6 +95,8 @@ ollama-top/
 ├── SPEC.md                  # this file
 ├── README.md
 ├── pyproject.toml
+├── Dockerfile
+├── docker-compose.yml
 └── ollama_top/
     ├── __init__.py
     ├── __main__.py          # entry point: parses args, launches TUI
@@ -144,7 +147,7 @@ def main():
 [project]
 name = "ollama-top"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "textual>=0.61.0",
     "aiohttp>=3.9.0",
@@ -157,18 +160,38 @@ ollama-top = "ollama_top.__main__:main"
 
 ## Installation (target UX)
 
+### Via pipx
 ```bash
 pipx install ollama-top
 ollama-top
 ```
 
-Or for development:
+### Development (bare Python in venv)
 ```bash
 git clone https://github.com/evandhoffman/ollama-top
 cd ollama-top
-pip install -e .
-ollama-top
+uv sync
+uv run ollama-top
 ```
+
+### Docker
+```bash
+docker build -t ollama-top .
+docker run --rm -it --network host ollama-top
+```
+
+Note: `--network host` is needed so the container can reach Ollama on localhost.
+Alternatively, pass `--host` to point at the Docker host IP.
+
+## Dockerfile
+
+- Base image: `cgr.dev/chainguard/python:latest-dev` (Wolfi-based, low CVE surface)
+- Multi-stage build: install deps with uv in a builder stage, copy `.venv` to runtime
+- Copy uv binary from `ghcr.io/astral-sh/uv:latest` rather than installing it
+- Runtime user: `nonroot`
+- Create writable `/data` dir for SQLite DB before `USER nonroot`
+- Set `OLLAMA_HOST` default to `http://host.docker.internal:11434` for convenience
+- Entry point: `ollama-top`
 
 ## Out of Scope
 
