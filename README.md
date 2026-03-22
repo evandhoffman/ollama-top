@@ -1,6 +1,8 @@
 # ollama-top
 
 > **Status: Proof of concept / on hold.** See [Known limitations](#known-limitations) below.
+>
+> **Successor project: [olltop](https://github.com/evandhoffman/olltop)** — a Go rewrite using eBPF/pcap to get real tok/s.
 
 A `top`-like terminal UI for monitoring a locally running [Ollama](https://ollama.com) instance in real time.
 
