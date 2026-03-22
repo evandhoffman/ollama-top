@@ -1,34 +1,18 @@
 # ollama-top
 
+> **Status: Proof of concept / on hold.** See [Known limitations](#known-limitations) below.
+
 A `top`-like terminal UI for monitoring a locally running [Ollama](https://ollama.com) instance in real time.
 
-Zero configuration, no proxy, no sudo — just run it and it works.
+## What it shows today
 
-```
-┌─ ollama-top ─────────────────── localhost:11434 ── v0.3.x ── q to quit ─┐
-│                                                                           │
-├─ Loaded Models ───────────────────────────────────────────────────────────┤
-│ MODEL                  SIZE      VRAM      STATUS    EXPIRES              │
-│ qwen2.5:14b            8.9 GB    8.9 GB    running   2m 14s               │
-│ deepseek-r1:8b         4.7 GB    4.7 GB    idle      8m 02s               │
-│                                                                           │
-├─ Performance ─────────────────────────────────────────────────────────────┤
-│ tokens/sec (est)   ▁▂▄▆█▇▅▃▂▄▆█   ~42 tok/s                              │
-│ active requests    1                                                      │
-│                                                                           │
-├─ System ──────────────────────────────────────────────────────────────────┤
-│ CPU   ████████░░  78%          RAM   12.4 GB / 32.0 GB  (38%)            │
-└───────────────────────────────────────────────────────────────────────────┘
-```
+- **Loaded models** — name, size, VRAM usage, idle/running status, expiry countdown
+- **Activity** — sparkline of active model count over time
+- **System** — CPU and RAM utilization via psutil
+
+All data comes from Ollama's local HTTP API (`/api/ps`, `/api/version`) and `psutil`.
 
 ## Install
-
-### pipx (recommended)
-
-```bash
-pipx install ollama-top
-ollama-top
-```
 
 ### Development
 
@@ -46,8 +30,6 @@ docker build -t ollama-top .
 docker run --rm -it --network host ollama-top
 ```
 
-`--network host` lets the container reach Ollama on localhost. Alternatively, pass `--host` to specify the host explicitly.
-
 ## Configuration
 
 | Method | Example |
@@ -58,14 +40,6 @@ docker run --rm -it --network host ollama-top
 
 The `--host` flag takes precedence over `$OLLAMA_HOST`.
 
-## What it monitors
-
-- **Loaded models** — name, size, VRAM usage, status (running/idle), expiry countdown
-- **Throughput** — estimated tokens/sec with sparkline history
-- **System** — CPU and RAM utilization
-
-All data comes from Ollama's local HTTP API (`/api/ps`, `/api/version`) and `psutil`. No inference requests are made.
-
 ## Requirements
 
 - Python >= 3.13
@@ -74,9 +48,12 @@ All data comes from Ollama's local HTTP API (`/api/ps`, `/api/version`) and `psu
 
 ## Known limitations
 
-- Token/s is **estimated** from polling `/api/ps` status transitions, not measured directly
+**No real-time tokens/sec.** This was the primary goal of the project, but it turns out Ollama's `/api/ps` endpoint does not expose token throughput metrics. The `eval_count` and `eval_duration` fields that contain tok/s data are only available in the streaming response body of `/api/generate` and `/api/chat` — which means you'd need to either proxy all Ollama traffic or parse server logs. Proxying doesn't help for the Ollama Mac app (which talks directly to `localhost:11434`), and log parsing requires access to Ollama's process output. See [#12](https://github.com/evandhoffman/ollama-top/issues/12) for details.
+
+Other limitations:
 - GPU metrics are not available without sudo on macOS and are intentionally omitted
 - VRAM numbers reflect Ollama's own reporting (model weights only)
+- Model "running" status is detected by watching `expires_at` changes between polls, which is indirect and has a 1-second resolution
 
 ## License
 

@@ -2,7 +2,9 @@
 
 ## Project overview
 
-ollama-top is a terminal UI (TUI) for monitoring a local Ollama instance. Built with Textual, it polls Ollama's HTTP API and displays loaded models, throughput estimates, and system metrics. See `spec.md` for the full specification.
+ollama-top is a terminal UI (TUI) for monitoring a local Ollama instance. Built with Textual, it polls Ollama's HTTP API and displays loaded models, activity status, and system metrics. See `spec.md` for the full specification.
+
+**Status: Proof of concept / on hold.** The original goal was real-time tok/s monitoring, but `/api/ps` doesn't expose token throughput — see issue #12. The app can show loaded models, VRAM, activity detection, and CPU/RAM, but not tok/s.
 
 ## Tech stack
 
@@ -37,7 +39,7 @@ ollama_top/
 - **No GPU metrics** — intentionally omitted (requires sudo on macOS)
 - **No proxy/intercept** — only observe via `/api/ps`, never make inference requests
 - **Graceful degradation** — if Ollama is unreachable, show error and retry automatically
-- Token/s is estimated and must be labeled as such in the UI
+- **No tok/s** — `/api/ps` doesn't expose throughput; see issue #12 for details and possible workarounds
 
 ## Docker
 

@@ -125,7 +125,7 @@ class OllamaTop(App):
         super().__init__()
         self._collector = collector
         self._latest: Snapshot | None = None
-        self._tps_history: list[float] = []
+        self._activity_history: list[float] = []
         self._collector.on_snapshot(self._on_snapshot)
 
     def compose(self) -> ComposeResult:
@@ -141,9 +141,9 @@ class OllamaTop(App):
             yield Static("Performance", classes="panel-title")
             with Vertical(id="perf-panel"):
                 with Horizontal(id="sparkline-row"):
-                    yield Sparkline([], id="tps-sparkline")
-                    yield Label("~0 tok/s (est)", id="tps-label")
-                yield Label("active requests  0", id="active-label")
+                    yield Sparkline([], id="activity-sparkline")
+                    yield Label("0 active", id="activity-label")
+                yield Label("models loaded  0", id="models-label")
             yield Static("System", classes="panel-title")
             with Vertical(id="sys-panel"):
                 with Horizontal(classes="bar-row"):
@@ -181,10 +181,9 @@ class OllamaTop(App):
     def _on_snapshot(self, snapshot: Snapshot) -> None:
         """Callback from collector — store latest snapshot."""
         self._latest = snapshot
-        if snapshot.estimated_tps > 0 or snapshot.active_count > 0:
-            self._tps_history.append(snapshot.estimated_tps)
-            # Keep last 20 entries for sparkline
-            self._tps_history = self._tps_history[-20:]
+        # Always record activity count so the sparkline has data
+        self._activity_history.append(float(snapshot.active_count))
+        self._activity_history = self._activity_history[-20:]
 
     def _refresh_ui(self) -> None:
         """Update all widgets with latest snapshot data."""
@@ -232,16 +231,14 @@ class OllamaTop(App):
 
     def _update_perf(self, snap: Snapshot) -> None:
         """Refresh the performance panel."""
-        sparkline = self.query_one("#tps-sparkline", Sparkline)
-        if self._tps_history:
-            sparkline.data = self._tps_history
-        else:
-            sparkline.data = [0.0]
+        sparkline = self.query_one("#activity-sparkline", Sparkline)
+        sparkline.data = self._activity_history if self._activity_history else [0.0]
 
-        tps_val = self._tps_history[-1] if self._tps_history else 0.0
-        self.query_one("#tps-label", Label).update(f"~{tps_val:.0f} tok/s (est)")
-        self.query_one("#active-label", Label).update(
-            f"active requests  {snap.active_count}"
+        active = snap.active_count
+        label = f"{active} active" if active != 1 else "1 active"
+        self.query_one("#activity-label", Label).update(label)
+        self.query_one("#models-label", Label).update(
+            f"models loaded  {len(snap.models)}"
         )
 
     def _update_system(self, snap: Snapshot) -> None:
